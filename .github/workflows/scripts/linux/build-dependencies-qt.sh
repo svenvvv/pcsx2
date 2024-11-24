@@ -19,7 +19,7 @@ LIBJPEG=9f
 LIBPNG=1.6.44
 LIBWEBP=1.4.0
 LZ4=b8fd2d15309dd4e605070bd4486e26b6ef814e29
-SDL=SDL2-2.30.9
+SDL=preview-3.1.6
 QT=6.8.0
 ZSTD=1.5.6
 
@@ -37,7 +37,7 @@ fd6f417fe9e3a071cf1424a5152d926a34c4a3c5070745470be6cf12a404ed79  $LIBBACKTRACE.
 60c4da1d5b7f0aa8d158da48e8f8afa9773c1c8baa5d21974df61f1886b8ce8e  libpng-$LIBPNG.tar.xz
 61f873ec69e3be1b99535634340d5bde750b2e4447caa1db9f61be3fd49ab1e5  libwebp-$LIBWEBP.tar.gz
 0728800155f3ed0a0c87e03addbd30ecbe374f7b080678bbca1506051d50dec3  $LZ4.tar.gz
-24b574f71c87a763f50704bbb630cbe38298d544a1f890f099a4696b1d6beba4  $SDL.tar.gz
+5da5e265c150b954d007bf1465b155d9df1d0d52f10115a49bb918dc8fe2826a  $SDL.tar.gz
 8c29e06cf42aacc1eafc4077ae2ec6c6fcb96a626157e0593d5e82a34fd403c1  zstd-$ZSTD.tar.gz
 1bad481710aa27f872de6c9f72651f89a6107f0077003d0ebfcc9fd15cba3c75  qtbase-everywhere-src-$QT.tar.xz
 595bf8557b91e1f8ebc726f1e09868a3c7e610ff5045068f2d4ea2428c49a5d4  qtimageformats-everywhere-src-$QT.tar.xz
@@ -57,7 +57,7 @@ curl -L \
 	-O "https://downloads.sourceforge.net/project/libpng/libpng16/$LIBPNG/libpng-$LIBPNG.tar.xz" \
 	-O "https://storage.googleapis.com/downloads.webmproject.org/releases/webp/libwebp-$LIBWEBP.tar.gz" \
 	-O "https://github.com/lz4/lz4/archive/$LZ4.tar.gz" \
-	-O "https://libsdl.org/release/$SDL.tar.gz" \
+	-O "https://github.com/libsdl-org/SDL/archive/refs/tags/$SDL.tar.gz" \
 	-O "https://github.com/facebook/zstd/releases/download/v$ZSTD/zstd-$ZSTD.tar.gz" \
 	-O "https://download.qt.io/official_releases/qt/${QT%.*}/$QT/submodules/qtbase-everywhere-src-$QT.tar.xz" \
 	-O "https://download.qt.io/official_releases/qt/${QT%.*}/$QT/submodules/qtimageformats-everywhere-src-$QT.tar.xz" \
@@ -133,7 +133,7 @@ cd ..
 echo "Building SDL..."
 rm -fr "$SDL"
 tar xf "$SDL.tar.gz"
-cd "$SDL"
+cd "SDL-$SDL"
 cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$INSTALLDIR" -DCMAKE_INSTALL_PREFIX="$INSTALLDIR" -DBUILD_SHARED_LIBS=ON -DSDL_SHARED=ON -DSDL_STATIC=OFF -G Ninja
 cmake --build build --parallel
 ninja -C build install
