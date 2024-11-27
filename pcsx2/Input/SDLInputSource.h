@@ -5,7 +5,7 @@
 
 #include "Input/InputSource.h"
 
-#include <SDL.h>
+#include <SDL3/SDL.h>
 
 #include <array>
 #include <functional>
@@ -49,13 +49,14 @@ private:
 	struct ControllerData
 	{
 		SDL_Haptic* haptic;
-		SDL_GameController* game_controller;
+		SDL_Gamepad* game_controller;
 		SDL_Joystick* joystick;
 		u16 rumble_intensity[2];
 		int haptic_left_right_effect;
 		int joystick_id;
 		int player_id;
 		bool use_game_controller_rumble;
+		bool has_player_led;
 
 		// Used to disable Joystick controls that are used in GameController inputs so we don't get double events
 		std::vector<bool> joy_button_used_in_gc;
@@ -78,8 +79,8 @@ private:
 
 	bool OpenDevice(int index, bool is_gamecontroller);
 	bool CloseDevice(int joystick_index);
-	bool HandleControllerAxisEvent(const SDL_ControllerAxisEvent* ev);
-	bool HandleControllerButtonEvent(const SDL_ControllerButtonEvent* ev);
+	bool HandleControllerAxisEvent(const SDL_GamepadAxisEvent* ev);
+	bool HandleControllerButtonEvent(const SDL_GamepadButtonEvent* ev);
 	bool HandleJoystickAxisEvent(const SDL_JoyAxisEvent* ev);
 	bool HandleJoystickButtonEvent(const SDL_JoyButtonEvent* ev);
 	bool HandleJoystickHatEvent(const SDL_JoyHatEvent* ev);

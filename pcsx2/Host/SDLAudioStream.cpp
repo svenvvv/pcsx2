@@ -7,7 +7,7 @@
 #include "common/Console.h"
 #include "common/Error.h"
 
-#include <SDL.h>
+#include <SDL3/SDL.h>
 
 namespace
 {
@@ -23,11 +23,17 @@ namespace
 		void CloseDevice();
 
 	protected:
-		__fi bool IsOpen() const { return (m_device_id != 0); }
+		__fi bool IsOpen() const { return (m_device_stream != nullptr); }
 
-		static void AudioCallback(void* userdata, uint8_t* stream, int len);
+		__fi u32 CalculateSampleCount(u32 bytes_len) const { return bytes_len / sizeof(SampleType) / m_output_channels; }
 
-		u32 m_device_id = 0;
+		static void AudioCallback(void* userdata, SDL_AudioStream* stream, int len, int total_amount);
+
+		SDL_AudioStream* m_device_stream = nullptr;
+
+		std::unique_ptr<SampleType[]> m_sample_buffer = nullptr;
+
+		u32 m_sample_buffer_size = 0;
 	};
 } // namespace
 
@@ -99,27 +105,32 @@ bool SDLAudioStream::OpenDevice(bool stretch_enabled, Error* error)
 			READ_CHANNEL_REAR_LEFT, READ_CHANNEL_REAR_RIGHT>,
 	}};
 
-	SDL_AudioSpec spec = {};
-	spec.freq = m_sample_rate;
-	spec.channels = m_output_channels;
-	spec.format = AUDIO_S16;
-	spec.samples = static_cast<Uint16>(GetBufferSizeForMS(
-		m_sample_rate, (m_parameters.minimal_output_latency) ? m_parameters.buffer_ms : m_parameters.output_latency_ms));
-	spec.callback = AudioCallback;
-	spec.userdata = static_cast<void*>(this);
+	u32 sample_frames = GetBufferSizeForMS(m_sample_rate, (m_parameters.minimal_output_latency) ? m_parameters.buffer_ms : m_parameters.output_latency_ms);
+	if (!SDL_SetHint(SDL_HINT_AUDIO_DEVICE_SAMPLE_FRAMES, std::to_string(sample_frames).c_str()))
+		Console.Warning("SDL_SetHint(SDL_HINT_AUDIO_DEVICE_SAMPLE_FRAMES) failed: {}", SDL_GetError());
 
-	SDL_AudioSpec obtained_spec = {};
-	m_device_id = SDL_OpenAudioDevice(nullptr, 0, &spec, &obtained_spec, SDL_AUDIO_ALLOW_SAMPLES_CHANGE);
-	if (m_device_id == 0)
-	{
-		Error::SetStringFmt(error, "SDL_OpenAudioDevice() failed: {}", SDL_GetError());
+	SDL_AudioSpec spec = {};
+	spec.format = SDL_AUDIO_S16;
+	spec.channels = m_output_channels;
+	spec.freq = m_sample_rate;
+
+	m_device_stream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec, AudioCallback, static_cast<void*>(this));
+	if (!m_device_stream) {
+		Error::SetStringFmt(error, "SDL_OpenAudioDeviceStream() failed: {}", SDL_GetError());
 		return false;
 	}
 
-	DEV_LOG("Requested {} frame buffer, got {} frame buffer", spec.samples, obtained_spec.samples);
+	SDL_AudioSpec obtained_spec = {};
+	int obtained_sample_frames = 0;
+	SDL_AudioDeviceID device_id = SDL_GetAudioStreamDevice(m_device_stream);
+	if (SDL_GetAudioDeviceFormat(device_id, &obtained_spec, &obtained_sample_frames))
+		DEV_LOG("Requested {} frame buffer, got {} frame buffer", sample_frames, obtained_sample_frames);
+	else
+		Console.Warning("SDL_GetAudioStreamDevice() failed: {}", SDL_GetError());
 
+	m_sample_buffer_size = CalculateSampleCount(obtained_sample_frames);
+	m_sample_buffer = std::make_unique<SampleType[]>(m_sample_buffer_size);
 	BaseInitialize(sample_readers[static_cast<size_t>(m_parameters.expansion_mode)], stretch_enabled);
-	SDL_PauseAudioDevice(m_device_id, 0);
 
 	return true;
 }
@@ -129,20 +140,31 @@ void SDLAudioStream::SetPaused(bool paused)
 	if (m_paused == paused)
 		return;
 
-	SDL_PauseAudioDevice(m_device_id, paused ? 1 : 0);
+	SDL_AudioDeviceID device_id = SDL_GetAudioStreamDevice(m_device_stream);
+	if (paused)
+		SDL_PauseAudioDevice(device_id);
+	else
+		SDL_ResumeAudioDevice(device_id);
+
 	m_paused = paused;
 }
 
 void SDLAudioStream::CloseDevice()
 {
-	SDL_CloseAudioDevice(m_device_id);
-	m_device_id = 0;
+	SDL_DestroyAudioStream(m_device_stream);
+	m_device_stream = nullptr;
+	m_sample_buffer_size = 0;
 }
 
-void SDLAudioStream::AudioCallback(void* userdata, uint8_t* stream, int len)
+void SDLAudioStream::AudioCallback(void* userdata, SDL_AudioStream* stream, int additional_amount, int /* total_amount */)
 {
 	SDLAudioStream* const this_ptr = static_cast<SDLAudioStream*>(userdata);
-	const u32 num_frames = len / sizeof(SampleType) / this_ptr->m_output_channels;
+	u32 num_frames = this_ptr->CalculateSampleCount(additional_amount);
 
-	this_ptr->ReadFrames(reinterpret_cast<SampleType*>(stream), num_frames);
+	if (num_frames > this_ptr->m_sample_buffer_size) {
+		Console.Warning("AudioCallback received request greater than buffer {}, buffer is {}", num_frames, this_ptr->m_sample_buffer_size);
+		num_frames = this_ptr->m_sample_buffer_size;
+	}
+
+	this_ptr->ReadFrames(this_ptr->m_sample_buffer.get(), num_frames);
 }
